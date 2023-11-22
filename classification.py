@@ -1,5 +1,6 @@
 from pandas import Series, DataFrame
 import pandas as pd
+from node import Node
 # import numpy as np
 
 
@@ -10,6 +11,16 @@ class DecisionTreeClassifier():
         self.classes = Y.unique()
         self.n_classes = len(self.classes)
         self.n_features = len(x.columns)
+        self.root = None
+
+    def fit(self, x: DataFrame, Y: Series):
+        self.root = self.create_node(x, Y)
+
+    def create_node(self, features: DataFrame, response: Series):
+        if len(features) == 0:
+            return None
+        best_feature = self._determine_best_feature(features)
+        features = features.drop(best_feature, axis=1)
 
     def _determine_best_feature(self, features):
         """Return which feature out of the list of features predicts the target best."""
