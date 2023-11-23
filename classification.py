@@ -1,16 +1,12 @@
 from pandas import Series, DataFrame
 import pandas as pd
 from node import Node
+from decision import Decision
 # import numpy as np
 
 
 class DecisionTreeClassifier():
-    def __init__(self, x: DataFrame, Y: Series):
-        self.x = x
-        self.Y = Y
-        self.classes = Y.unique()
-        self.n_classes = len(self.classes)
-        self.n_features = len(x.columns)
+    def __init__(self):
         self.root = None
 
     def fit(self, x: DataFrame, Y: Series):
@@ -19,8 +15,11 @@ class DecisionTreeClassifier():
     def create_node(self, features: DataFrame, response: Series):
         if len(features) == 0:
             return None
-        best_feature = self._determine_best_feature(features)
+        best_feature_name = self._determine_best_feature(features)
+        best_feature = features[best_feature_name]
         features = features.drop(best_feature, axis=1)
+
+        return self.create_node(features, response)
 
     def _determine_best_feature(self, features):
         """Return which feature out of the list of features predicts the target best."""
@@ -46,35 +45,36 @@ class DecisionTreeClassifier():
 
         return impurity
     
-    def gini(self, feature_name: str):
+    def gini(self, features: Series, feature_name: str, response: Series):
         """Return the weighted average of Gini Impurities for the Leaves of a candidate feature."""
-        feature_series = self.x[feature_name]
+        feature_series = features[feature_name]
         feature_type = feature_series.dtype
         # print(feature_type)
 
         if feature_type == "object":
             # print("gini - gini_categorical called.")
-            leaves = self.create_categorical_leaves(feature_series)
+            leaves = self.create_categorical_leaves(feature_series, response)
         else:
             leaves = self.create_continuous_leaves(feature_series, feature_name)
 
         return self.total_gini_impurity(leaves)
     
-    def total_gini_impurity(self, leaves: list) -> float:
+    def total_gini_impurity(self, leaves: list, features: Series) -> float:
         # print(leaves)
         total = 0
         for leaf in leaves:
-            weight = sum(leaf) / len(self.x)
+            weight = sum(leaf) / len(features)
             total += weight * self.leaf_gini(leaf)
 
         return total
     
-    def create_leaf(self, intersector: Series):
+    def create_leaf(self, intersector: Series, response: Series):
         # print(type(intersector))
+        classes = response.unique()
         leaf = []
 
-        for cls in self.classes:
-            class_positive = self.Y == cls
+        for cls in classes:
+            class_positive = response == cls
             intersection = class_positive & intersector
             if True in intersection.value_counts():
                 leaf.append(intersection.value_counts()[True])
@@ -83,22 +83,23 @@ class DecisionTreeClassifier():
 
         return leaf
 
-    def create_categorical_leaves(self, feature: Series) -> list:
+    def create_categorical_leaves(self, feature: Series, response: Series) -> list:
         """Return a list of leaves for a categorical column."""
         categories = feature.unique()
         # print(f"create_categorical_leaves - categories: {categories}")
         leaves = []
         for category in categories:
             # print(f"category: {category}")
-            leaf = self.create_leaf(feature == category)
+            decision = Decision(feature, category, lambda x, y: x == y)
+            leaf = self.create_leaf(decision(), response)
             leaves.append(leaf)
 
         return leaves
 
-    def create_continuous_leaves(self, feature: Series, feature_name: str) -> list:
+    def create_continuous_leaves(self, feature: Series, feature_name: str, features: Series, response: Series) -> list:
         """Return the weighted average of Gini Impurities for a continuous column."""
         # Recombine feature and Y
-        df = pd.concat([feature, self.Y], axis=1)
+        df = pd.concat([feature, response], axis=1)
 
         # Sort the rows by feature from lowest value to highest value
         df = df.sort_values(by=feature_name)
@@ -116,7 +117,7 @@ class DecisionTreeClassifier():
             positive_leaf = self.create_leaf(feature < average)
             negative_leaf = self.create_leaf(feature >= average)
 
-            total_gini_impurity = self.total_gini_impurity([positive_leaf, negative_leaf])
+            total_gini_impurity = self.total_gini_impurity([positive_leaf, negative_leaf], features)
             gini_impurities.append(total_gini_impurity)
         # print(gini_impurities)
         zipped = zip(averages, gini_impurities)
@@ -130,6 +131,7 @@ class DecisionTreeClassifier():
         best_pair = sorted_pairs[0]
         best_threshold = best_pair[0]   # (threshold, impurity)
 
+        print(type(feature < best_threshold))
         positive_leaf = self.create_leaf(feature < best_threshold)
         negative_leaf = self.create_leaf(feature >= best_threshold)
 
