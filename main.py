@@ -1,5 +1,5 @@
 from classification import DecisionTreeClassifier
-from decision import Decision
+from decision import Decision, Condition
 import pandas as pd
 
 
@@ -12,8 +12,8 @@ def main():
     response = df["loves_cool_as_ice"]
 
     algorithm = DecisionTreeClassifier()
-    print(algorithm.gini(predictors_df, "loves_popcorn", response))
-    print(algorithm.gini(predictors_df, "loves_soda", response))
+    # print(algorithm.gini(predictors_df, "loves_popcorn", response))
+    # print(algorithm.gini(predictors_df, "loves_soda", response))
     # print(algorithm.gini("age"))
     # algorithm.gini("age")
     # leaf = (1, 3)
@@ -24,6 +24,11 @@ def main():
 
     # d = Decision(7, 8, lambda x, y: x == y)
     # print(d())
+
+    # condition = Condition(predictors_df["loves_popcorn"], "yes", lambda x, y: x == y)
+    # print(condition())
+
+    algorithm.fit(predictors_df, response)
 
 
 if __name__ == "__main__":

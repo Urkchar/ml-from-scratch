@@ -1,7 +1,7 @@
 from pandas import Series, DataFrame
 import pandas as pd
 from node import Node
-from decision import Decision
+from decision import Decision, Condition
 # import numpy as np
 
 
@@ -9,8 +9,96 @@ class DecisionTreeClassifier():
     def __init__(self):
         self.root = None
 
-    def fit(self, x: DataFrame, Y: Series):
-        self.root = self.create_node(x, Y)
+    def fit(self, x: DataFrame, Y: Series, min_samples: int = 2):
+        # self.root = self.create_node(x, Y)
+        if len(x) < min_samples:
+            return None
+        
+        df = pd.concat([x, Y], axis=1)
+        print(df)
+        
+        # Determine which category of which feature gives the best split
+        best_decision = self.get_best_decision(x, Y)
+        # print("Done.")
+        # return
+
+        # Select the rows that go to the left...
+        # print(best_decision.condition())
+        decision_positive = df[best_decision.condition()]
+        # print(f"decision_positive: \n{decision_positive}")
+        # and to the right
+        decision_negative = df[~best_decision.condition()]   # Inverse the boolean series with ~
+        # print(f"decision_negative: \n{decision_negative}")
+
+        # print(decision_positive.drop(Y.name, axis=1))
+        # Create the left child
+        x_positive = decision_positive.drop(Y.name, axis=1)
+        Y_positive = decision_positive[Y.name]
+        best_decision.left_child = self.get_best_decision(x_positive, Y_positive)
+
+        # Create the right child
+        x_negative = decision_negative.drop(Y.name, axis=1)
+        Y_negative = decision_negative[Y.name]
+        best_decision.right_child = self.get_best_decision(x_negative, Y_negative)
+
+        self.root = best_decision
+
+    def get_best_decision(self, x: DataFrame, Y: Series) -> Decision:
+        """Return the best Decision of all features."""
+        print(f"len(x): {len(x)}")
+        if len(x) < 2:
+            return
+        candidate_feature_decisions = []
+        for column_name, feature in x.items():
+            print(f"Creating Decisions for {column_name}...")
+            feature_decisions = self.create_decisions(feature, Y)
+            print(f"Decisions for {column_name} created.")
+            
+            # Get the best decision for that feature
+            sorted_feature_decisions = sorted(feature_decisions, key=lambda x: x.impurity)
+            # print(feature_decisions)
+            best_feature_decision = sorted_feature_decisions[0]
+
+            candidate_feature_decisions.append(best_feature_decision)
+
+        sorted_decisions = sorted(candidate_feature_decisions, key=lambda x: x.impurity)
+        best_decision = sorted_decisions[0]
+
+        return best_decision
+
+    def create_decisions(self, feature: Series, Y: Series) -> list:
+        """Return a list of possible decisions for the feature."""
+        decisions = []
+        # For categorical columns
+        if feature.dtype == "object":
+            for category in feature.unique():
+                decision = Decision(feature, Y, Condition(feature, category, lambda x, y: x==y))
+                decisions.append(decision)
+        # For continuous columns
+        else:
+            feature = feature.sort_values()
+
+            # Get the average value between each numeric value
+            averages = feature.rolling(2).mean().dropna()
+
+            # Calculate the Gini Impurity values for each average value
+            for average in averages:
+                decision = Decision(feature, Y, Condition(feature, average, lambda x, y: x<y))
+                decisions.append(decision)
+            # raise NotImplementedError
+        
+        return decisions
+    
+    def get_best_category(self, feature: Series, Y: Series):
+        """Return the Decision that gives the lowest impurity for the feature."""
+        decisions = []
+        if feature.dtype == "object":
+            categories = feature.unique()
+            for category in categories:
+                decision = Decision(feature, Y, lambda x, y: x == y)
+        else:
+            feature = feature.sort_values()
+            categories = feature.rolling(2).mean().dropna()
 
     def create_node(self, features: DataFrame, response: Series):
         if len(features) == 0:
